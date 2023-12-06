@@ -195,6 +195,55 @@ class FilesController {
     }
   }
 
+  static async getFile(req: Request, res: Response) {
+    try {
+      // Extract token from X-Token header
+      const token = req.headers['x-token'];
+
+      // Extract file ID from request parameters
+      const fileId = req.params.id;
+
+      // Find the file in the database based on the file ID
+      const file = await dbClient.db.collection('files').findOne({
+        _id: dbClient.ObjectId(fileId),
+      });
+
+      // If no file is found, return Not Found
+      if (!file) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      // If the file is not public and the user is not authenticated or not the owner, return Not Found
+      const isOwner = token ? await redisClient.get(`auth_${token}`) === file.userId.toString() : false;
+      if (!file.isPublic && (!token || !isOwner)) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      // If the file type is a folder, return an error
+      if (file.type === 'folder') {
+        return res.status(400).json({ error: "A folder doesn't have content" });
+      }
+
+      // Check if the file is locally present
+      if (!file.localPath) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      // Get the MIME-type based on the file name
+      const mimeType = mime.lookup(file.name) || 'application/octet-stream';
+
+      // Read the content of the file
+      const fileContent = await fs.readFile(path.join(process.env.FOLDER_PATH || '/tmp/files_manager', file.localPath));
+
+      // Set the appropriate headers and send the file content
+      res.setHeader('Content-Type', mimeType);
+      res.status(200).send(fileContent);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+
   static async putPublish(req: Request, res: Response) {
     try {
       // Extract token from X-Token header
