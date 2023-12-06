@@ -1,28 +1,30 @@
+import { Request, Response } from 'express';
 import redisClient from '../utils/redis';
 import dbClient from '../utils/db';
 
 class AppController {
-  static async getStatus(req, res) {
-    const status = {
-      redis: redisClient.isAlive(),
-      db: dbClient.isAlive(),
-    };
-    res.status(200).json(status);
+  static async getStatus(req: Request, res: Response) {
+    const redisAlive = redisClient.isAlive();
+    const dbAlive = dbClient.isAlive();
+
+    res.status(200).json({
+      redis: redisAlive,
+      db: dbAlive,
+    });
   }
 
-  static async getStats(req, res) {
+  static async getStats(req: Request, res: Response) {
     try {
-      const usersCount = await dbClient.nbUsers();
-      const filesCount = await dbClient.nbFiles();
+      await dbClient.connect(); // Ensure the connection to MongoDB is established
+      const nbUsers = await dbClient.nbUsers();
+      const nbFiles = await dbClient.nbFiles();
 
-      const stats = {
-        users: usersCount,
-        files: filesCount,
-      };
-
-      res.status(200).json(stats);
+      res.status(200).json({
+        users: nbUsers,
+        files: nbFiles,
+      });
     } catch (error) {
-      console.error(`Error getting stats: ${error}`);
+      console.error(error);
       res.status(500).json({ error: 'Internal Server Error' });
     }
   }
