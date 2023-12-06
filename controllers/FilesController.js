@@ -194,6 +194,112 @@ class FilesController {
       res.status(500).json({ error: 'Internal Server Error' });
     }
   }
+
+  static async putPublish(req: Request, res: Response) {
+    try {
+      // Extract token from X-Token header
+      const token = req.headers['x-token'];
+
+      // If no token is provided, return Unauthorized
+      if (!token) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      // Retrieve the user ID from Redis based on the token
+      const userId = await redisClient.get(`auth_${token}`);
+
+      // If no user ID is found, return Unauthorized
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      // Extract file ID from request parameters
+      const fileId = req.params.id;
+
+      // Find the file in the database based on the file ID and user ID
+      const file = await dbClient.db.collection('files').findOne({
+        _id: dbClient.ObjectId(fileId),
+        userId: dbClient.ObjectId(userId),
+      });
+
+      // If no file is found, return Not Found
+      if (!file) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      // Update the value of isPublic to true
+      await dbClient.db.collection('files').updateOne(
+        { _id: dbClient.ObjectId(fileId) },
+        { $set: { isPublic: true } }
+      );
+
+      // Respond with the updated file document
+      res.status(200).json({
+        id: file._id,
+        name: file.name,
+        type: file.type,
+        isPublic: true,
+        parentId: file.parentId,
+        localPath: file.localPath,
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+
+  static async putUnpublish(req: Request, res: Response) {
+    try {
+      // Extract token from X-Token header
+      const token = req.headers['x-token'];
+
+      // If no token is provided, return Unauthorized
+      if (!token) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      // Retrieve the user ID from Redis based on the token
+      const userId = await redisClient.get(`auth_${token}`);
+
+      // If no user ID is found, return Unauthorized
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      // Extract file ID from request parameters
+      const fileId = req.params.id;
+
+      // Find the file in the database based on the file ID and user ID
+      const file = await dbClient.db.collection('files').findOne({
+        _id: dbClient.ObjectId(fileId),
+        userId: dbClient.ObjectId(userId),
+      });
+
+      // If no file is found, return Not Found
+      if (!file) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      // Update the value of isPublic to false
+      await dbClient.db.collection('files').updateOne(
+        { _id: dbClient.ObjectId(fileId) },
+        { $set: { isPublic: false } }
+      );
+
+      // Respond with the updated file document
+      res.status(200).json({
+        id: file._id,
+        name: file.name,
+        type: file.type,
+        isPublic: false,
+        parentId: file.parentId,
+        localPath: file.localPath,
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
 }
 
 export default FilesController;
