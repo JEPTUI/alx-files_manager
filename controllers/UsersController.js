@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
 import dbClient from '../utils/db';
 import sha1 from 'sha1';
+import Bull from 'bull';
+
+const userQueue = new Bull('userQueue');
 
 class UsersController {
   static async postNew(req: Request, res: Response) {
@@ -28,10 +31,9 @@ class UsersController {
       const hashedPassword = sha1(password);
 
       // Create a new user object
-      const newUser = {
-        email,
-        password: hashedPassword,
-      };
+      const newUser = await dbClient.createUser(email, password);
+
+      await userQueue.add({ userId: newUser._id });
 
       // Insert the new user into the database
       const result = await dbClient.db.collection('users').insertOne(newUser);
@@ -41,6 +43,7 @@ class UsersController {
         id: result.insertedId,
         email: newUser.email,
       });
+      return res.status(201).json({ id: newUser._id, email: newUser.email });
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Internal Server Error' });

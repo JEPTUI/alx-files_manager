@@ -1,6 +1,33 @@
 import fileQueue from './utils/queue';
 import dbClient from './utils/db';
 import thumbnailGenerator from './utils/thumbnailGenerator';
+import Bull from 'bull';
+import nodemailer from 'nodemailer';
+
+const userQueue = new Bull('userQueue');
+
+userQueue.process(async (job) => {
+  try {
+    const { userId } = job.data;
+
+    if (!userId) {
+      throw new Error('Missing userId in job');
+    }
+
+    // Fetch user from DB
+    const user = await dbClient.getUserById(userId);
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // In a real scenario, you would send an email using a third-party service like Mailgun.
+    // For now, just log the welcome message to the console.
+    console.log(`Welcome ${user.email}!`);
+  } catch (error) {
+    console.error('Error processing userQueue job:', error);
+  }
+});
 
 fileQueue.process(async (job) => {
   try {
