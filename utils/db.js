@@ -1,4 +1,4 @@
-import mongodb from 'mongodb';
+import { MongoClient } from 'mongodb';
 
 class DBClient {
   constructor() {
@@ -10,23 +10,51 @@ class DBClient {
     const uri = `mongodb://${host}:${port}/${database}`;
 
     this.client = new MongoClient(uri, { useUnifiedTopology: true });
-    this.client.connect;
+  }
+
+  async connect() {
+    try {
+      await this.client.connect();
+      this.db = this.client.db(this.databaseName);
+      console.log('Connected to MongoDB');
+    } catch (error) {
+      console.error('Error connecting to MongoDB:', error);
+    }
   }
 
   isAlive() {
-    return this.client.isConnected();
+    try {
+      return this.client.isConnected();
+    } catch (error) {
+      console.error('Error checking MongoDB connection:', error);
+      return false;
+    }
   }
 
   async nbUsers() {
-    return this.client.db().collection('users').countDocuments();
+    try {
+      const usersCollection = this.db.collection('users');
+      const count = await usersCollection.countDocuments();
+      return count;
+    } catch (error) {
+      console.error('Error counting users:', error);
+      return -1;
+    }
   }
 
   async nbFiles() {
-    return this.client.db().collection('files').countDocuments();
+    try {
+      const filesCollection = this.db.collection('files');
+      const count = await filesCollection.countDocuments();
+      return count;
+    } catch (error) {
+      console.error('Error counting files:', error);
+      return -1;
+    }
   }
 }
 
-export const dbClient = new DBClient();
+const dbClient = new DBClient();
 dbClient.connect();
 
 export default dbClient;

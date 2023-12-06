@@ -5,31 +5,33 @@ class RedisClient {
   constructor() {
     // Create a redis client
     this.client = redis.createClient();
-    this.isClientConnected = true;
+
+    // Handle redis client errors
     this.client.on('error', (err) => {
-      console.error('Redis client failed to connect:', err.message || err.toString());
-      this.isClientConnected = false;
+      console.error(`Redis client error: ${err}`);
     });
   }
 
   isAlive() {
-    return this.isClientConnected();
+    return this.client.isConnected();
   }
 
   async get(key) {
-    const getAsync = promisify(this.client.GET).bind(this.client);
+    const getAsync = promisify(this.client.get).bind(this.client);
     return getAsync(key);
   }
 
   async set(key, value, duration) {
-    await promisify(this.client.SETEX).bind(this.client)(key, duration, value);
+    const setAsync = promisify(this.client.setex).bind(this.client);
+    return setAsync(key, duration, value);
   }
 
   async del(key) {
-    await promisify(this.client.DEL).bind(this.client)(key);
+    const delAsync = promisify(this.client.del).bind(this.client);
+    return delAsync(key);
   }
 }
 
 // Create and export an instance of redisclient
-export const redisClient = new RedisClient();
+const redisClient = new RedisClient();
 module.exports = redisClient;
