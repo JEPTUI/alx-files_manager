@@ -46,6 +46,45 @@ class UsersController {
       res.status(500).json({ error: 'Internal Server Error' });
     }
   }
+
+  static async getMe(req: Request, res: Response) {
+    try {
+      // Extract token from X-Token header
+      const token = req.headers['x-token'];
+
+      // If no token is provided, return Unauthorized
+      if (!token) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      // Retrieve the user ID from Redis based on the token
+      const userId = await redisClient.get(`auth_${token}`);
+
+      // If no user ID is found, return Unauthorized
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      // Find the user in the database based on the user ID
+      const user = await dbClient.db.collection('users').findOne({
+        _id: dbClient.ObjectId(userId),
+      });
+
+      // If no user is found, return Unauthorized
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      // Respond with the user object (email and id only)
+      res.status(200).json({
+        email: user.email,
+        id: user._id,
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
 }
 
 export default UsersController;

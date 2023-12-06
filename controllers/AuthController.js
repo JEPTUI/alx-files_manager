@@ -1,52 +1,63 @@
+import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import sha1 from 'sha1';
 import redisClient from '../utils/redis';
 import dbClient from '../utils/db';
 
 class AuthController {
-  static async getConnect(req, res) {
-    const authHeader = req.headers.authorization;
+  static async getConnect(req: Request, res: Response) {
+    try {
+      // Extract credentials from the Authorization header using Basic Auth
+      const credentials = Buffer.from(req.headers.authorization.split(' ')[1], 'base64').toString('utf-8');
+      const [email, password] = credentials.split(':');
 
-    if (!authHeader || !authHeader.startsWith('Basic ')) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      // Find user in the database based on email and hashed password
+      const user = await dbClient.db.collection('users').findOne({
+        email,
+        password: sha1(password),
+      });
+
+      // If no user is found, return Unauthorized
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      // Generate a random token using uuidv4
+      const token = uuidv4();
+
+      // Create a Redis key for storing the user ID with the token as the key
+      const key = `auth_${token}`;
+
+      // Store the user ID in Redis with a 24-hour expiration
+      await redisClient.set(key, user._id.toString(), 24 * 60 * 60);
+
+      // Respond with the generated token
+      res.status(200).json({ token });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Internal Server Error' });
     }
-
-    // Extract and decode the Base64 credentials
-    const credentialsBase64 = authHeader.split(' ')[1];
-    const credentials = Buffer.from(credentialsBase64, 'base64').toString('utf-8');
-    const [email, password] = credentials.split(':');
-
-    // Find user by email and password
-    const hashedPassword = sha1(password);
-    const user = await dbClient.users.findOne({ email, password: hashedPassword });
-
-    if (!user) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    // Generate a random token
-    const token = uuidv4();
-
-    // Store user ID in Redis with the token as key
-    const redisKey = `auth_${token}`;
-    await redisClient.set(redisKey, user._id.toString(), 24 * 60 * 60);
-
-    // Return the token
-    return res.status(200).json({ token });
   }
 
-  static async getDisconnect(req, res) {
-    const token = req.headers['x-token'];
+  static async getDisconnect(req: Request, res: Response) {
+    try {
+      // Extract token from X-Token header
+      const token = req.headers['x-token'];
 
-    if (!token) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      // If no token is provided, return Unauthorized
+      if (!token) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      // Delete the token from Redis
+      await redisClient.del(`auth_${token}`);
+
+      // Respond with no content (status code 204)
+      res.status(204).send();
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Internal Server Error' });
     }
-
-    // Delete the token in Redis
-    await redisClient.del(`auth_${token}`);
-
-    // Return nothing with status code 204
-    return res.status(204).send();
   }
 }
 
