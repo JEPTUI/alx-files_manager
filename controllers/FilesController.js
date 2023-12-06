@@ -24,6 +24,8 @@ class FilesController {
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
+      const job = await fileQueue.add({ userId, fileId });
+
       // Extract file details from the request body
       const { name, type, parentId = 0, isPublic = false, data } = req.body;
 
@@ -99,6 +101,7 @@ class FilesController {
         parentId: newFile.parentId,
         localPath: newFile.localPath,
       });
+      res.status(201).json(newFile);
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Internal Server Error' });
@@ -208,6 +211,17 @@ class FilesController {
         _id: dbClient.ObjectId(fileId),
       });
 
+      // Get the size from the query parameters, default to 500
+      const size = parseInt(req.query.size, 10) || 500;
+
+      // Check if the file exists based on the size
+      const filePath = `${file.localPath}_${size}`;
+      const fileExists = await fs.access(filePath).then(() => true).catch(() => false);
+
+      if (!fileExists) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
       // If no file is found, return Not Found
       if (!file) {
         return res.status(404).json({ error: 'Not found' });
@@ -238,6 +252,7 @@ class FilesController {
       // Set the appropriate headers and send the file content
       res.setHeader('Content-Type', mimeType);
       res.status(200).send(fileContent);
+      res.status(200).sendFile(filePath);
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Internal Server Error' });
