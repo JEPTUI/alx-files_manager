@@ -104,6 +104,96 @@ class FilesController {
       res.status(500).json({ error: 'Internal Server Error' });
     }
   }
+
+  static async getShow(req: Request, res: Response) {
+    try {
+      // Extract token from X-Token header
+      const token = req.headers['x-token'];
+
+      // If no token is provided, return Unauthorized
+      if (!token) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      // Retrieve the user ID from Redis based on the token
+      const userId = await redisClient.get(`auth_${token}`);
+
+      // If no user ID is found, return Unauthorized
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      // Extract file ID from request parameters
+      const fileId = req.params.id;
+
+      // Find the file in the database based on the file ID and user ID
+      const file = await dbClient.db.collection('files').findOne({
+        _id: dbClient.ObjectId(fileId),
+        userId: dbClient.ObjectId(userId),
+      });
+
+      // If no file is found, return Not Found
+      if (!file) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      // Respond with the file document
+      res.status(200).json(file);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+
+  static async getIndex(req: Request, res: Response) {
+    try {
+      // Extract token from X-Token header
+      const token = req.headers['x-token'];
+
+      // If no token is provided, return Unauthorized
+      if (!token) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      // Retrieve the user ID from Redis based on the token
+      const userId = await redisClient.get(`auth_${token}`);
+
+      // If no user ID is found, return Unauthorized
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      // Extract parentId and page from query parameters
+      const parentId = req.query.parentId || 0;
+      const page = parseInt(req.query.page, 10) || 0;
+      const perPage = 20;
+
+      // Aggregate to get paginated files based on parentId and userId
+      const files = await dbClient.db
+        .collection('files')
+        .aggregate([
+          {
+            $match: {
+              userId: dbClient.ObjectId(userId),
+              parentId: dbClient.ObjectId(parentId),
+            },
+          },
+          {
+            $skip: page * perPage,
+          },
+          {
+            $limit: perPage,
+          },
+        ])
+        .toArray();
+
+      // Respond with the list of files
+      res.status(200).json(files);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
 }
 
 export default FilesController;
