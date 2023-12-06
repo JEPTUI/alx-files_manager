@@ -1,61 +1,50 @@
-import { hash } from 'sha1';
+import { Request, Response } from 'express';
 import dbClient from '../utils/db';
-import redisClient from '../utils/redis';
+import sha1 from 'sha1';
 
 class UsersController {
-  static async postNew(req, res) {
-    const { email, password } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ error: 'Missing email' });
-    }
-
-    if (!password) {
-      return res.status(400).json({ error: 'Missing password' });
-    }
-
+  static async postNew(req: Request, res: Response) {
     try {
-      // const usersCount = await dbClient.nbUsers();
-      const userExists = await dbClient.client.db().collection('users').findOne({ email });
+      // Extract email and password from the request body
+      const { email, password } = req.body;
 
-      if (userExists) {
+      // Check if email is missing
+      if (!email) {
+        return res.status(400).json({ error: 'Missing email' });
+      }
+
+      // Check if password is missing
+      if (!password) {
+        return res.status(400).json({ error: 'Missing password' });
+      }
+
+      // Check if email already exists in the database
+      const existingUser = await dbClient.db.collection('users').findOne({ email });
+      if (existingUser) {
         return res.status(400).json({ error: 'Already exists' });
       }
 
-      const hashedPassword = hash(password);
+      // Hash the password using SHA1
+      const hashedPassword = sha1(password);
 
-      const usersCollection = dbClient.client.db().collection('users');
-      const result = await usersCollection.insertOne({ email, password: hashedPassword });
+      // Create a new user object
+      const newUser = {
+        email,
+        password: hashedPassword,
+      };
 
-      const newUser = { email, _id: result.insertedId };
-      return res.status(201).json(newUser);
+      // Insert the new user into the database
+      const result = await dbClient.db.collection('users').insertOne(newUser);
+
+      // Respond with the new user data and status code 201 (Created)
+      res.status(201).json({
+        id: result.insertedId,
+        email: newUser.email,
+      });
     } catch (error) {
-      console.error(`Error creating new user: ${error}`);
-      return res.status(500).json({ error: 'Internal Server Error' });
+      console.error(error);
+      res.status(500).json({ error: 'Internal Server Error' });
     }
-  }
-
-  static async getMe(req, res) {
-    const token = req.headers['x-token'];
-    if (!token) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    // Retrieve user ID from Redis
-    const userId = await redisClient.get(`auth_${token}`);
-
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    // Retrieve user from MongoDB
-    const user = await dbClient.users.findOne({ _id: userId });
-
-    if (!user) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-    // Return user object (email and id only)
-    return res.status(200).json({ email: user.email, id: user._id });
   }
 }
 
